@@ -28,10 +28,8 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x gradlew
 
-    - name: Build with Gradle (CI Optimized)
-      # --no-daemon and JVM args prevent GitHub runner memory crashes
-      # --console=plain stops Gradle from hiding errors in the UI
-      run: ./gradlew assembleDebug --no-daemon -Dorg.gradle.jvmargs="-Xmx2048m -XX:+HeapDumpOnOutOfMemoryError" --console=plain
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug --no-daemon -Dorg.gradle.jvmargs="-Xmx2048m" --console=plain
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
@@ -39,10 +37,3 @@ jobs:
       with:
         name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
-        
-    - name: Upload Error Reports (If Failed)
-      uses: actions/upload-artifact@v4
-      if: failure()
-      with:
-        name: gradle-build-reports
-        path: app/build/reports/
