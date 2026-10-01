@@ -1,105 +1,156 @@
 package com.z9tether
 
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.hardware.usb.UsbDevice
-import android.hardware.usb.UsbManager
+import android.graphics.Bitmap
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.z9tether.usb.UsbCameraManager
+import androidx.compose.ui.unit.sp
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var usbManager: UsbManager
-    private val permissionAction = "com.z9tether.USB_PERMISSION"
-
-    private var status by mutableStateOf("USB ● DISCONNECTED")
-
-    private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == permissionAction) {
-                val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
-                val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                status = if (granted && device != null) {
-                    "USB ● PERMISSION GRANTED\n${device.deviceName}"
-                } else {
-                    "USB ● PERMISSION DENIED"
-                }
-            }
-        }
+    companion object {
+        var currentBitmap by mutableStateOf<Bitmap?>(null)
+        var isConnected by mutableStateOf(false)
+        var statusMessage by mutableStateOf("Waiting for Nikon Z9 connection...")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
-
-        registerReceiver(
-            receiver,
-            IntentFilter(permissionAction),
-            Context.RECEIVER_NOT_EXPORTED
-        )
-
         setContent {
             MaterialTheme {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
                 ) {
-                    Text("Z9 TETHER", style = MaterialTheme.typography.headlineMedium)
-                    Text(status)
-                    Text("Camera: Nikon Z9 / Nikon USB device")
-                    Text("Protocol: MTP/PTP")
-                    Button(onClick = { scan() }) {
-                        Text("CONNECT")
-                    }
-                    Text(
-                        "MVP: USB detection and PTP foundation. " +
-                            "Physical Z9 validation is required before claiming automatic photo pull."
+                    TetherScreen(
+                        bitmap = currentBitmap,
+                        isConnected = isConnected,
+                        statusMessage = statusMessage
                     )
                 }
             }
         }
     }
+}
 
-    private fun scan() {
-        val manager = UsbCameraManager(this)
-        val device = manager.devices().firstOrNull(manager::isLikelyNikon)
-        if (device == null) {
-            status = "USB ● Nikon device not found"
-            return
-        }
-
-        if (!usbManager.hasPermission(device)) {
-            val pi = PendingIntent.getBroadcast(
-                this,
-                0,
-                Intent(permissionAction),
-                PendingIntent.FLAG_IMMUTABLE
+@Composable
+fun TetherScreen(
+    bitmap: Bitmap?,
+    isConnected: Boolean,
+    statusMessage: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Top Connection Status Header
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
             )
-            usbManager.requestPermission(device, pi)
-        } else {
-            status = "USB ● READY\n${device.deviceName}"
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "Nikon Z9 Tether",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        text = statusMessage,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(14.dp)
+                        .background(
+                            color = if (isConnected) Color.Green else Color.Red,
+                            shape = CircleShape
+                        )
+                )
+            }
         }
-    }
 
-    override fun onDestroy() {
-        unregisterReceiver(receiver)
-        super.onDestroy()
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Image Display Area
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f)
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Transferred Shot",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    if (isConnected) {
+                        CircularProgressIndicator(color = Color.White)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Ready to receive photos...",
+                            color = Color.White,
+                            fontSize = 14.sp
+                        )
+                    } else {
+                        Text(
+                            text = "Connect Nikon Z9 via USB-C cable",
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+        }
     }
 }
